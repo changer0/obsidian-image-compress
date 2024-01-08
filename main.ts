@@ -81,7 +81,7 @@ export default class MyPlugin extends Plugin {
 						height: this.settings.height,//undefined
 						async success(result: Blob) {
 							log('压缩成功: ' + JSON.stringify(result))
-							new Notice('压缩成功:' + JSON.stringify(result));
+							//new Notice('压缩成功:' + JSON.stringify(result));
 
 							let buffer = await result.arrayBuffer();
 							await that.app.vault.adapter.writeBinary(tFile.path, buffer);

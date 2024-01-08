@@ -5,64 +5,102 @@ import Compressor from 'image-compressor.js';
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
-	mySetting: string;
+	quality: number;
+	convertSize: number;
+	maxWidth: number;//Infinity
+	maxHeight: number;//Infinity
+	width: number | undefined;//undefined
+	height: number | undefined;//undefined
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+	quality: 0.2,
+	convertSize: 500 * 1024,//500K
+	maxWidth: Infinity,//Infinity
+	maxHeight: Infinity,//Infinity
+	width: undefined,//undefined
+	height: undefined,//undefined
 }
 
 export default class MyPlugin extends Plugin {
 	//配置内容
 	settings: MyPluginSettings;
-	//当前
-	curHandleImage: String;
-	
+	//当前处理的图片
+	processingImage: String;
+
 	async onload() {
 		let that = this
 		await this.loadSettings();
-	
+
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-		
+		this.addSettingTab(new SettingTab(this.app, this));
+
 		// https://blog.csdn.net/fangfangtulk/article/details/117958685
 		this.app.workspace.onLayoutReady(() => {
 			//new Notice('工作空间准备完毕!');
-			console.log("工作空间准备完毕, 开始注册相关事件!");
-			
+			log('工作空间准备完毕, 开始注册相关事件! 当前 Setting 配置: ' + JSON.stringify(this.settings));
+
 			//注册文件创建事件
 			this.registerEvent(
 				this.app.vault.on('create', async (tFile) => {
-					if (!(tFile instanceof TFile) || tFile.name === 'new.png') {
+					if (!(tFile instanceof TFile)) {
 						return;
 					}
-			
+
+					if (!(tFile.extension === 'png' || tFile.extension === 'jpg' || tFile.extension === 'jpeg')) {
+						log('当前文件不是图片类: ' + tFile.extension);
+						return;
+					}
+
+					//忽略自动生成的 Image
+					if (tFile.path === this.processingImage) {
+						log('此为当前处理的Image,忽略: ' + this.processingImage)
+						this.processingImage = '';
+						return;
+					}
+
+					this.processingImage = tFile.path;
+					log('当前要处理的图片: ' + this.processingImage)
+					//从当前的处理的图片中获取二进制数据
 					const fileContentArrayBuffer: ArrayBuffer = await this.app.vault.readBinary(tFile);
-					const blob = new Blob([fileContentArrayBuffer], {type: 'image/*'});
+					const blob = new Blob([fileContentArrayBuffer], { type: 'image/' + tFile.extension });
 					if (blob == null) {
-						new Notice("文件为空");
+						new Notice('当前处理的图片文件为空:' + this.processingImage);
 						return;
 					}
 
-					console.log("realFile: " + blob)
- 					new Compressor(blob, {
-						quality:0.5,
-						convertSize: 100 * 1024,//100k,
-						maxWidth: 100,
-						maxHeight: 100,
+					log('realFile: ' + blob)
+					new Compressor(blob, {
+						// quality: 0.2,
+						// convertSize: 100 * 1000,
+						quality: this.settings.quality,
+						convertSize: this.settings.convertSize,//500k,
+						maxWidth: this.settings.maxWidth ? this.settings.maxWidth : Infinity,//Infinity
+						maxHeight: this.settings.maxHeight ? this.settings.maxHeight : Infinity,//Infinity
+						width: this.settings.width,//undefined
+						height: this.settings.height,//undefined
 						async success(result: Blob) {
-							console.log("压缩成功: " + JSON.stringify(result))
-							new Notice("压缩成功:" + result);
+							log('压缩成功: ' + JSON.stringify(result))
+							new Notice('压缩成功:' + JSON.stringify(result));
 
-							let buffer = await result.arrayBuffer()
-							await that.app.vault.adapter.writeBinary('new.png', buffer)
+							let buffer = await result.arrayBuffer();
+							await that.app.vault.adapter.writeBinary(tFile.path, buffer);
+							log('已重新写入压缩后的图片: ' + tFile.path)
+
+							// const activeEditor = that.app.workspace.activeEditor
+							// if (activeEditor) {
+							// 	log('刷新当前页面!')
+							// 	//好像不起作用?
+							// 	activeEditor.editor?.refresh()
+							// }
 						},
 						error(err: Error) {
 							//new Notice('图片压缩失败---->>>>>', err.message)
-							console.log("图片压缩失败: " + err)
+							log('图片压缩失败: ' + JSON.stringify(err));
+							new Notice('图片压缩失败: ' + JSON.stringify(err));
 						}
 					})
-			
+
 				})
 			);
 		})
@@ -78,19 +116,19 @@ export default class MyPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		
+
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		
+
 	}
 
 
 }
 
-
-class SampleSettingTab extends PluginSettingTab {
+/// 设置页面
+class SettingTab extends PluginSettingTab {
 	plugin: MyPlugin;
 
 	constructor(app: App, plugin: MyPlugin) {
@@ -104,15 +142,25 @@ class SampleSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
+			.setName('图像质量')
+			.setDesc('0到1之间, 默认0.5, 值约小, 压缩得越小!')
 			.addText(text => text
 				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
+				.setValue(this.plugin.settings.quality.toString())
 				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-					
+
+					let quality = parseFloat(value) 
+					if (isNaN(quality)) {
+						new Notice("参数类型不合法!")
+					} else {
+						this.plugin.settings.quality = quality;
+						await this.plugin.saveSettings();
+					}
 				}));
 	}
+}
+
+//当前日志
+function log(msg: string) {
+	console.log("IMAGE_COMPRESS: " + msg)
 }

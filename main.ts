@@ -143,17 +143,103 @@ class SettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('图像质量')
-			.setDesc('0到1之间, 默认0.5, 值约小, 压缩得越小!')
+			.setDesc('0到1之间，默认0.5，值约小，压缩得越小。')
 			.addText(text => text
-				.setPlaceholder('Enter your secret')
+				.setPlaceholder('输入图像质量。')
 				.setValue(this.plugin.settings.quality.toString())
 				.onChange(async (value) => {
 
-					let quality = parseFloat(value) 
+					let quality = parseFloat(value)
 					if (isNaN(quality)) {
-						new Notice("参数类型不合法!")
+						new Notice("参数类型不合法！")
 					} else {
 						this.plugin.settings.quality = quality;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('转换大小')
+			.setDesc('PNG文件超过此值将被转换为JPEG格式。')
+			.addText(text => text
+				.setPlaceholder('输入转换大小')
+				.setValue(this.plugin.settings.convertSize.toString())
+				.onChange(async (value) => {
+
+					let tempValue = parseFloat(value)
+					if (isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+					} else {
+					this.plugin.settings.convertSize = tempValue;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+
+		new Setting(containerEl)
+			.setName('最大宽度')
+			.setDesc('输出图像的最大宽度，类型是 number。默认值是 Infinity。值应该大于0。')
+			.addText(text => text
+				.setPlaceholder('输入最大宽度')
+				.setValue(this.plugin.settings.maxWidth?.toString() ?? "")
+				.onChange(async (value) => {
+
+					let tempValue = parseFloat(value)
+					if (isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+					} else {
+						this.plugin.settings.maxWidth = tempValue;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('最大高度')
+			.setDesc('输出图像的最大高度，类型是 number。默认值是 Infinity。值应该大于0。')
+			.addText(text => text
+				.setPlaceholder('输入最大高度')
+				.setValue(this.plugin.settings.maxHeight?.toString() ?? "")
+				.onChange(async (value) => {
+
+					let tempValue = parseFloat(value)
+					if (isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+					} else {
+						this.plugin.settings.maxHeight = tempValue;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('图像宽度')
+			.setDesc('输出图像的宽度，类型是 number。默认值是 undefined。值应该大于0。')
+			.addText(text => text
+				.setPlaceholder('输入图像宽度')
+				.setValue(this.plugin.settings.width?.toString() ?? "")
+				.onChange(async (value) => {
+
+					let tempValue = parseFloat(value)
+					if (isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+					} else {
+						this.plugin.settings.width = tempValue;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('图像高度')
+			.setDesc('输出图像的高度，类型是 number。默认值是 undefined。值应该大于0。')
+			.addText(text => text
+				.setPlaceholder('输入图像宽度')
+				.setValue(this.plugin.settings.height?.toString() ?? "")
+				.onChange(async (value) => {
+
+					let tempValue = parseFloat(value)
+					if (isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+					} else {
+						this.plugin.settings.height = tempValue;
 						await this.plugin.saveSettings();
 					}
 				}));

@@ -15,7 +15,7 @@ interface MyPluginSettings {
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
 	quality: 0.5,
-	convertSize: 300 * 1024,//500K
+	convertSize: 100 * 1024,//300K
 	maxWidth: undefined,//Infinity
 	maxHeight: undefined,//Infinity
 	width: undefined,//undefined
@@ -73,6 +73,14 @@ export default class MyPlugin extends Plugin {
 						new Notice('当前处理的图片文件为空:' + this.processingImage);
 						return;
 					}
+					//原始大小
+					let originSize = blob.size
+
+					if (originSize <= this.settings.convertSize) {
+						//new Notice('当前图片无需:' + this.processingImage);
+						console.log('【' + tFile.name + '】' +  '【' + formatBytes(originSize) + '】' +"当前图片无需处理😄")
+						return;
+					}
 
 					//log('realFile: ' + blob)
 					new Compressor(blob, {
@@ -91,7 +99,7 @@ export default class MyPlugin extends Plugin {
 							let buffer = await result.arrayBuffer();
 							await that.app.vault.adapter.writeBinary(tFile.path, buffer);
 							//四舍五入round
-							let msg = '【' + tFile.name + '】' + '压缩完成：' + Math.round(result.size / 1024) + 'k';
+							let msg = '【' + tFile.name + '】' + '压缩完成：' + formatBytes(originSize) + ' -> ' + formatBytes(result.size) + ' 🍺🍺🍺';
 							log(msg)
 							new Notice(msg);
 							// const activeEditor = that.app.workspace.activeEditor
@@ -149,6 +157,24 @@ class SettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
+		.setName('压缩最小值')
+		.setDesc('只有超过压缩最小值才会进行压缩，注意，PNG文件超过此值将被转换为JPEG格式。')
+		.addText(text => text
+			.setPlaceholder('输入压缩最小值')
+			.setValue(this.plugin.settings.convertSize.toString())
+			.onChange(async (value) => {
+				let tempValue = parseFloat(value)
+				if (value !== "" && isNaN(tempValue)) {
+					new Notice("参数类型不合法！")
+					return;
+				}
+
+				this.plugin.settings.convertSize = value === "" ? DEFAULT_SETTINGS.convertSize : tempValue;
+				await this.plugin.saveSettings();
+			}));
+
+
+		new Setting(containerEl)
 			.setName('图像质量')
 			.setDesc('0到1之间，默认0.5，值约小，压缩得越小。')
 			.addText(text => text
@@ -164,24 +190,6 @@ class SettingTab extends PluginSettingTab {
 					this.plugin.settings.quality = value === "" ? undefined : quality;
 					await this.plugin.saveSettings();
 				}));
-
-		new Setting(containerEl)
-			.setName('转换大小')
-			.setDesc('PNG文件超过此值将被转换为JPEG格式。')
-			.addText(text => text
-				.setPlaceholder('输入转换大小')
-				.setValue(this.plugin.settings.convertSize.toString())
-				.onChange(async (value) => {
-					let tempValue = parseFloat(value)
-					if (value !== "" && isNaN(tempValue)) {
-						new Notice("参数类型不合法！")
-						return;
-					}
-
-					this.plugin.settings.convertSize = value === "" ? DEFAULT_SETTINGS.convertSize : tempValue;
-					await this.plugin.saveSettings();
-				}));
-
 
 		new Setting(containerEl)
 			.setName('最大宽度')
@@ -254,4 +262,12 @@ class SettingTab extends PluginSettingTab {
 //当前日志
 function log(msg: string) {
 	console.log("IMAGE_COMPRESS: " + msg)
+}
+//获取Byte
+function formatBytes(bytes: number, decimals: number = 2): string {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 }

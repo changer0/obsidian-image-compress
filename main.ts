@@ -86,7 +86,7 @@ export default class MyPlugin extends Plugin {
 							let buffer = await result.arrayBuffer();
 							await that.app.vault.adapter.writeBinary(tFile.path, buffer);
 							log('已重新写入压缩后的图片: ' + tFile.path)
-
+							new Notice(tFile.name + '压缩完成：' + (result.size/1024) + "k");
 							// const activeEditor = that.app.workspace.activeEditor
 							// if (activeEditor) {
 							// 	log('刷新当前页面!')

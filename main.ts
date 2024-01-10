@@ -5,19 +5,19 @@ import Compressor from 'image-compressor.js';
 // Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
-	quality: number;
+	quality: number | undefined;//undefined
 	convertSize: number;
-	maxWidth: number;//Infinity
-	maxHeight: number;//Infinity
+	maxWidth: number | undefined;//Infinity
+	maxHeight: number | undefined;//Infinity
 	width: number | undefined;//undefined
 	height: number | undefined;//undefined
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
-	quality: 0.2,
-	convertSize: 500 * 1024,//500K
-	maxWidth: Infinity,//Infinity
-	maxHeight: Infinity,//Infinity
+	quality: 0.5,
+	convertSize: 300 * 1024,//500K
+	maxWidth: undefined,//Infinity
+	maxHeight: undefined,//Infinity
 	width: undefined,//undefined
 	height: undefined,//undefined
 }
@@ -52,6 +52,9 @@ export default class MyPlugin extends Plugin {
 						return;
 					}
 
+					//针对图片类型做个控制
+					let imageType = tFile.extension === 'jpg' ? "jpeg" : tFile.extension
+
 					//忽略自动生成的 Image
 					if (tFile.path === this.processingImage) {
 						log('此为当前处理的Image,忽略: ' + this.processingImage)
@@ -63,13 +66,15 @@ export default class MyPlugin extends Plugin {
 					log('当前要处理的图片: ' + this.processingImage)
 					//从当前的处理的图片中获取二进制数据
 					const fileContentArrayBuffer: ArrayBuffer = await this.app.vault.readBinary(tFile);
-					const blob = new Blob([fileContentArrayBuffer], { type: 'image/' + tFile.extension });
+					log("File Extension: " + tFile.extension)
+					
+					const blob = new Blob([fileContentArrayBuffer], { type: 'image/' + imageType });
 					if (blob == null) {
 						new Notice('当前处理的图片文件为空:' + this.processingImage);
 						return;
 					}
 
-					log('realFile: ' + blob)
+					//log('realFile: ' + blob)
 					new Compressor(blob, {
 						// quality: 0.2,
 						// convertSize: 100 * 1000,
@@ -85,8 +90,10 @@ export default class MyPlugin extends Plugin {
 
 							let buffer = await result.arrayBuffer();
 							await that.app.vault.adapter.writeBinary(tFile.path, buffer);
-							log('已重新写入压缩后的图片: ' + tFile.path)
-							new Notice(tFile.name + '压缩完成：' + (result.size/1024) + "k");
+							//四舍五入round
+							let msg = '【' + tFile.name + '】' + '压缩完成：' + Math.round(result.size / 1024) + 'k';
+							log(msg)
+							new Notice(msg);
 							// const activeEditor = that.app.workspace.activeEditor
 							// if (activeEditor) {
 							// 	log('刷新当前页面!')
@@ -121,7 +128,7 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-
+		log("保存的 Setting 文件：" + JSON.stringify(this.settings))
 	}
 
 
@@ -146,16 +153,16 @@ class SettingTab extends PluginSettingTab {
 			.setDesc('0到1之间，默认0.5，值约小，压缩得越小。')
 			.addText(text => text
 				.setPlaceholder('输入图像质量。')
-				.setValue(this.plugin.settings.quality.toString())
+				.setValue(this.plugin.settings.quality?.toString() ?? "")
 				.onChange(async (value) => {
-
 					let quality = parseFloat(value)
-					if (isNaN(quality)) {
+					if (value !== "" && isNaN(quality)) {
 						new Notice("参数类型不合法！")
-					} else {
-						this.plugin.settings.quality = quality;
-						await this.plugin.saveSettings();
+						return;
 					}
+
+					this.plugin.settings.quality = value === "" ? undefined : quality;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)
@@ -165,14 +172,14 @@ class SettingTab extends PluginSettingTab {
 				.setPlaceholder('输入转换大小')
 				.setValue(this.plugin.settings.convertSize.toString())
 				.onChange(async (value) => {
-
 					let tempValue = parseFloat(value)
-					if (isNaN(tempValue)) {
+					if (value !== "" && isNaN(tempValue)) {
 						new Notice("参数类型不合法！")
-					} else {
-					this.plugin.settings.convertSize = tempValue;
-						await this.plugin.saveSettings();
+						return;
 					}
+
+					this.plugin.settings.convertSize = value === "" ? DEFAULT_SETTINGS.convertSize : tempValue;
+					await this.plugin.saveSettings();
 				}));
 
 
@@ -183,14 +190,13 @@ class SettingTab extends PluginSettingTab {
 				.setPlaceholder('输入最大宽度')
 				.setValue(this.plugin.settings.maxWidth?.toString() ?? "")
 				.onChange(async (value) => {
-
 					let tempValue = parseFloat(value)
-					if (isNaN(tempValue)) {
+					if (value !== "" && isNaN(tempValue)) {
 						new Notice("参数类型不合法！")
-					} else {
-						this.plugin.settings.maxWidth = tempValue;
-						await this.plugin.saveSettings();
+						return;
 					}
+					this.plugin.settings.maxWidth = value === "" ? DEFAULT_SETTINGS.maxWidth : tempValue;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)
@@ -200,14 +206,13 @@ class SettingTab extends PluginSettingTab {
 				.setPlaceholder('输入最大高度')
 				.setValue(this.plugin.settings.maxHeight?.toString() ?? "")
 				.onChange(async (value) => {
-
 					let tempValue = parseFloat(value)
-					if (isNaN(tempValue)) {
+					if (value !== "" && isNaN(tempValue)) {
 						new Notice("参数类型不合法！")
-					} else {
-						this.plugin.settings.maxHeight = tempValue;
-						await this.plugin.saveSettings();
+						return;
 					}
+					this.plugin.settings.maxHeight = value === "" ? DEFAULT_SETTINGS.maxHeight : tempValue;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)
@@ -217,14 +222,14 @@ class SettingTab extends PluginSettingTab {
 				.setPlaceholder('输入图像宽度')
 				.setValue(this.plugin.settings.width?.toString() ?? "")
 				.onChange(async (value) => {
-
 					let tempValue = parseFloat(value)
-					if (isNaN(tempValue)) {
+					if (value !== "" && isNaN(tempValue)) {
 						new Notice("参数类型不合法！")
-					} else {
-						this.plugin.settings.width = tempValue;
-						await this.plugin.saveSettings();
+						return;
 					}
+
+					this.plugin.settings.width = value === "" ? DEFAULT_SETTINGS.width :tempValue;
+					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)
@@ -234,14 +239,14 @@ class SettingTab extends PluginSettingTab {
 				.setPlaceholder('输入图像宽度')
 				.setValue(this.plugin.settings.height?.toString() ?? "")
 				.onChange(async (value) => {
-
 					let tempValue = parseFloat(value)
-					if (isNaN(tempValue)) {
+					if (value !== "" && isNaN(tempValue)) {
 						new Notice("参数类型不合法！")
-					} else {
-						this.plugin.settings.height = tempValue;
-						await this.plugin.saveSettings();
+						return;
 					}
+
+					this.plugin.settings.height = value === "" ? DEFAULT_SETTINGS.height :tempValue;
+					await this.plugin.saveSettings();
 				}));
 	}
 }

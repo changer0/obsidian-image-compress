@@ -1,6 +1,7 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, TFile } from 'obsidian';
 
 import Compressor from 'image-compressor.js';
+import { createInfoIcon } from 'utils';
 
 // Remember to rename these classes and interfaces!
 
@@ -11,6 +12,7 @@ interface MyPluginSettings {
 	maxHeight: number | undefined;//Infinity
 	width: number | undefined;//undefined
 	height: number | undefined;//undefined
+	ignoredPaths: string[]; // 更新为 ignoredPaths，包含文件和目录
 }
 
 const DEFAULT_SETTINGS: MyPluginSettings = {
@@ -20,13 +22,15 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	maxHeight: undefined,//Infinity
 	width: undefined,//undefined
 	height: undefined,//undefined
+	ignoredPaths: [], // 默认为空数组
+
 }
 
 export default class MyPlugin extends Plugin {
 	//配置内容
 	settings: MyPluginSettings;
 	//当前处理的图片
-	processingImage: String;
+	processingImage: string;
 
 	async onload() {
 		let that = this
@@ -64,13 +68,34 @@ export default class MyPlugin extends Plugin {
 
 					this.processingImage = tFile.path;
 					log('当前要处理的图片: ' + this.processingImage)
+
+					// 检查文件路径是否在忽略列表中
+					for (const ignoredPath of this.settings.ignoredPaths) {
+						try {
+							const regex = new RegExp(ignoredPath); // 创建正则表达式
+							if (regex.test(this.processingImage)) { // 使用正则测试
+								let msg = '此文件或目录被忽略: ' + this.processingImage;
+								log(msg);
+								new Notice(msg);
+								this.processingImage = '';
+								return;
+							}
+						} catch (e) {
+							log('无效的正则表达式: ' + ignoredPath);
+							new Notice('无效的正则表达式: ' + ignoredPath);
+							continue; // 继续检查下一个路径
+						}
+					}
+
+
 					//从当前的处理的图片中获取二进制数据
 					const fileContentArrayBuffer: ArrayBuffer = await this.app.vault.readBinary(tFile);
 					log("File Extension: " + tFile.extension)
-					
+
 					const blob = new Blob([fileContentArrayBuffer], { type: 'image/' + imageType });
 					if (blob == null) {
 						new Notice('当前处理的图片文件为空:' + this.processingImage);
+						this.processingImage = '';
 						return;
 					}
 					//原始大小
@@ -78,7 +103,8 @@ export default class MyPlugin extends Plugin {
 
 					if (originSize <= this.settings.convertSize) {
 						//new Notice('当前图片无需:' + this.processingImage);
-						console.log('【' + tFile.name + '】' +  '【' + formatBytes(originSize) + '】' +"当前图片无需处理😄")
+						log('【' + tFile.name + '】' + '【' + formatBytes(originSize) + '】' + "当前图片无需处理😄")
+						this.processingImage = '';
 						return;
 					}
 
@@ -157,21 +183,21 @@ class SettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-		.setName('压缩最小值')
-		.setDesc('只有超过压缩最小值才会进行压缩，注意，PNG文件超过此值将被转换为JPEG格式。')
-		.addText(text => text
-			.setPlaceholder('输入压缩最小值')
-			.setValue(this.plugin.settings.convertSize.toString())
-			.onChange(async (value) => {
-				let tempValue = parseFloat(value)
-				if (value !== "" && isNaN(tempValue)) {
-					new Notice("参数类型不合法！")
-					return;
-				}
+			.setName('压缩最小值')
+			.setDesc('只有超过压缩最小值才会进行压缩，注意，PNG文件超过此值将被转换为JPEG格式。')
+			.addText(text => text
+				.setPlaceholder('输入压缩最小值')
+				.setValue(this.plugin.settings.convertSize.toString())
+				.onChange(async (value) => {
+					let tempValue = parseFloat(value)
+					if (value !== "" && isNaN(tempValue)) {
+						new Notice("参数类型不合法！")
+						return;
+					}
 
-				this.plugin.settings.convertSize = value === "" ? DEFAULT_SETTINGS.convertSize : tempValue;
-				await this.plugin.saveSettings();
-			}));
+					this.plugin.settings.convertSize = value === "" ? DEFAULT_SETTINGS.convertSize : tempValue;
+					await this.plugin.saveSettings();
+				}));
 
 
 		new Setting(containerEl)
@@ -193,7 +219,7 @@ class SettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('最大宽度')
-			.setDesc('输出图像的最大宽度，类型是 number。默认值是 Infinity。值应该大于0。')
+			.setDesc('输出图像的最大宽度，类型是 number。默认值是 Infinity（无穷大）。值应该大于0。')
 			.addText(text => text
 				.setPlaceholder('输入最大宽度')
 				.setValue(this.plugin.settings.maxWidth?.toString() ?? "")
@@ -209,7 +235,7 @@ class SettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('最大高度')
-			.setDesc('输出图像的最大高度，类型是 number。默认值是 Infinity。值应该大于0。')
+			.setDesc('输出图像的最大高度，类型是 number。默认值是 Infinity（无穷大）。值应该大于0。')
 			.addText(text => text
 				.setPlaceholder('输入最大高度')
 				.setValue(this.plugin.settings.maxHeight?.toString() ?? "")
@@ -225,7 +251,7 @@ class SettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('图像宽度')
-			.setDesc('输出图像的宽度，类型是 number。默认值是 undefined。值应该大于0。')
+			.setDesc('输出图像的宽度，类型是 number。默认值是 undefined（未定义）。值应该大于0。')
 			.addText(text => text
 				.setPlaceholder('输入图像宽度')
 				.setValue(this.plugin.settings.width?.toString() ?? "")
@@ -236,13 +262,13 @@ class SettingTab extends PluginSettingTab {
 						return;
 					}
 
-					this.plugin.settings.width = value === "" ? DEFAULT_SETTINGS.width :tempValue;
+					this.plugin.settings.width = value === "" ? DEFAULT_SETTINGS.width : tempValue;
 					await this.plugin.saveSettings();
 				}));
 
 		new Setting(containerEl)
 			.setName('图像高度')
-			.setDesc('输出图像的高度，类型是 number。默认值是 undefined。值应该大于0。')
+			.setDesc('输出图像的高度，类型是 number。默认值是 undefined（未定义）。值应该大于0。')
 			.addText(text => text
 				.setPlaceholder('输入图像宽度')
 				.setValue(this.plugin.settings.height?.toString() ?? "")
@@ -253,9 +279,44 @@ class SettingTab extends PluginSettingTab {
 						return;
 					}
 
-					this.plugin.settings.height = value === "" ? DEFAULT_SETTINGS.height :tempValue;
+					this.plugin.settings.height = value === "" ? DEFAULT_SETTINGS.height : tempValue;
 					await this.plugin.saveSettings();
 				}));
+
+
+		// 忽略压缩的文件和目录
+		new Setting(containerEl)
+			.setName('忽略压缩的文件和目录')
+			.setDesc('输入文件和目录路径，每行一个，这些将被忽略。')
+			.addTextArea(text => {
+				const textAreaComponent = text
+					.setPlaceholder('输入要忽略的文件和目录')
+					.setValue(this.plugin.settings.ignoredPaths.join('\n'))
+					.onChange(async (value) => {
+						this.plugin.settings.ignoredPaths = value.split('\n').map(path => path.trim());
+						await this.plugin.saveSettings();
+					});
+
+				// 设置文本区域的宽度
+				textAreaComponent.inputEl.style.width = '100%'; // 设置为100%宽度
+				textAreaComponent.inputEl.style.minWidth = '300px'; // 可选，设置最小宽度
+
+				// 创建包含文本区域的父容器
+				const textAreaContainer = containerEl.createDiv();
+				textAreaContainer.style.position = 'relative'; // 设置相对定位
+
+				// 使用封装的函数添加提示信息图标
+				const infoTitle = '支持忽略文件或文件夹，使用正则表达式匹配，每行分割。例如：\n/^.*\\.png$/\n/^directory\\/.*$/\n这些路径将不会被压缩。';
+  
+				const infoIcon = createInfoIcon(textAreaContainer, infoTitle);
+
+				// 将文本区域添加到容器
+				textAreaContainer.appendChild(textAreaComponent.inputEl); // 使用 inputEl 获取 DOM 元素
+				textAreaContainer.appendChild(infoIcon); // 添加提示信息图标
+				containerEl.appendChild(textAreaContainer);
+			});
+
+
 	}
 }
 
@@ -265,9 +326,9 @@ function log(msg: string) {
 }
 //获取Byte
 function formatBytes(bytes: number, decimals: number = 2): string {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+	if (bytes === 0) return '0 Bytes';
+	const k = 1024;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
 }
